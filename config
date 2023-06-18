@@ -1,3 +1,16 @@
+# 有无 syncthing 需要更新证书
+export SYNCTHING=false
+# 有的话，给出 API_KEY
+export SYNCTHING_API_KEY=InsertYourAPIKeyHere
+
+# 域名所有者电子邮件
+export EMAIL=your@email.name
+
+# ZeroSSL 的凭证，通常不需要
+# export ZEROSSL_KEY="your_api_key"
+# export EAB_KID='your eab kid'
+# export EAB_HMAC_KEY='your eab hmac key'
+
 # 你主域名，如 baidu.com sina.com.cn 等
 export DOMAIN=your_domain
 
