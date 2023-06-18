@@ -6,7 +6,7 @@
 - 将下载工具和更新证书分开
 - 支持自动下载最新版本的 acme.sh ，不再依赖 syno-acme 本身来更新
 - 自动提示输入 sudo 密码
-- python 部分支持 python3
+- 不再使用 python，完全用shell实现
 - 支持syncthing
 
 注释掉重启 webservice 部分，因为不通用，建议有能力者自行写这部分代码。
@@ -16,7 +16,7 @@
 ```bash
 # 1. 将脚本复制到 home 文件夹下
 cd ~
-git clone git@github.com:goosy/syno-acme.git
+git clone https://github.com/goosy/syno-acme.git
 
 # 2. 更新 acme.sh 工具
 syno-acme/cert-up.sh install
@@ -31,7 +31,7 @@ syno-acme/cert-up.sh register
 # 5. 更新证书及服务
 syno-acme/cert-up.sh update
 
-# 6. 根据需要回退证书（第4步出错时也会自动调用）
+# 6. 根据需要回退证书
 syno-acme/cert-up.sh revert
 ```
 
