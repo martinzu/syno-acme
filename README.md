@@ -2,21 +2,27 @@
 
 通过acme协议更新群晖HTTPS泛域名证书的自动脚本
 
-本脚本 fork 自 [andyzhshg/syno-acme](https://github.com/andyzhshg/syno-acme)，在它的基础上
-- 将下载工具和更新证书分开
-- 支持自动下载最新版本的 acme.sh ，不再依赖 syno-acme 本身来更新
-- 自动提示输入 sudo 密码
-- 不再使用 python，完全用shell实现
-- 支持syncthing
+本脚本 fork 自 [goosy/syno-acme](https://github.com/goosy/syno-acme)，在它的基础上
+- 去除原作者的 syncthing 部分，本人只用群晖 Drive 套件。如果有 syncthing 需求还请参考原作者脚本代码；
+- 将下载工具和更新证书分开，以参数形式执行脚本。详见下方使用部分；
+- 支持自动下载最新版本的 acme.sh ，不再依赖 syno-acme 本身来更新；
+- 脚本使用 root 角色执行计划任务，去除原作者 sudo 部分；
+- 不再使用 python，完全用shell实现；
+- 在原作者基础之上修改：
+    - 增加代理模式下载 acme，国内互联网如无代理可能无法正常下载；
+    - 更改 wgt 下载 acme 方式为 curl，wget 在我群晖环境中无法下载；
+    - 修改 jq 读取配置文件逻辑；
+    - 增加日志输出到脚本同级目录下文件cert-up.log 中（包含时间）;
+    - 修正恢复证书逻辑；
 
 注释掉重启 webservice 部分，因为不通用，建议有能力者自行写这部分代码。
 
 ## 安装
 
 ```bash
-# 1. 将脚本复制到 home 文件夹下
+# 1. 将脚本复制到指定文件夹下
 cd ~
-git clone https://github.com/goosy/syno-acme.git
+git clone https://github.com/martinzu/syno-acme.git
 
 # 2. 更新 acme.sh 工具
 syno-acme/cert-up.sh install
