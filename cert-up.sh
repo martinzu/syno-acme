@@ -22,11 +22,14 @@ TEMP_PATH=~/temp
 ARCHIEV_PATH="${CRT_BASE_PATH}/_archive"
 INFO_FILE_PATH="${ARCHIEV_PATH}/INFO"
 
-SYNCTHING_PATH=/volume1/@appdata/syncthing
-# Before DSM 7.0, use the following instead:
-#SYNCTHING_PATH=/var/packages/syncthing/target/var
-SYNCTHING_USER=sc-syncthing
-SYNCTHING_GROUP=synocommunity
+# 定义代理服务器地址和端口
+PROXY_SERVER=http://10.10.10.200:1087
+
+# 定义日志文件
+LOG_FILE="$(dirname "$0")/cert-up.log"
+
+# 清空日志文件
+: > "$LOG_FILE"
 
 if [ ! -d ${ACME_BIN_PATH} ]; then
   mkdir ${ACME_BIN_PATH}
@@ -40,7 +43,6 @@ if [ -f ${ACME_BIN_PATH}/config ]; then
   source ${ACME_BIN_PATH}/config
 else
   has_config=false
-  SYNCTHING=false
 fi
 do_register=false
 if [ "$has_config" = true ] && [ ! -f ${ACME_BIN_PATH}/registed ]; then
@@ -48,44 +50,37 @@ if [ "$has_config" = true ] && [ ! -f ${ACME_BIN_PATH}/registed ]; then
 fi
 
 backup_cert() {
-  echo 'begin backup_cert'
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - begin backup_cert" | tee -a "$LOG_FILE"
   BACKUP_PATH=~/cert_backup/${DATE_TIME}
   mkdir -p ${BACKUP_PATH}
-  sudo cp -r ${CRT_BASE_PATH} ${BACKUP_PATH}
-  sudo cp -r ${PKG_CRT_BASE_PATH} ${BACKUP_PATH}/package_cert
+  cp -r ${CRT_BASE_PATH} ${BACKUP_PATH}
+  cp -r ${PKG_CRT_BASE_PATH} ${BACKUP_PATH}/package_cert
   echo ${BACKUP_PATH} >~/cert_backup/latest
-  echo 'done backup_cert'
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - done backup_cert" | tee -a "$LOG_FILE"
   return 0
 }
 
 install_acme() {
-  echo 'begin install_acme'
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - begin install_acme" | tee -a "$LOG_FILE"
   mkdir -p ${TEMP_PATH}
   rm -rf ${TEMP_PATH}/acme.sh
   cd ${TEMP_PATH}
-  echo 'begin downloading acme.sh tool...'
-  LATEST_URL=$(curl -Ls -o /dev/null -w %{url_effective} https://github.com/acmesh-official/acme.sh/releases/latest 2>&1)
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - begin downloading acme.sh tool..." | tee -a "$LOG_FILE"
+  LATEST_URL=$(curl -x $PROXY_SERVER -Ls -o /dev/null -w %{url_effective} https://github.com/acmesh-official/acme.sh/releases/latest 2>&1)
   ACME_SH_ADDRESS=${LATEST_URL//releases\/tag\//archive\/}.tar.gz
   SRC_TAR_NAME=acme.sh.tar.gz
-  curl -L -o ${SRC_TAR_NAME} ${ACME_SH_ADDRESS}
+  curl -x $PROXY_SERVER -L -o ${SRC_TAR_NAME} ${ACME_SH_ADDRESS}
   if [ ! -f ${TEMP_PATH}/${SRC_TAR_NAME} ]; then
-    echo 'download failed'
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - download acme.sh failed"  | tee -a "$LOG_FILE"
     exit 1
   fi
   SRC_NAME=$(tar -tzf ${SRC_TAR_NAME} | head -1 | cut -f1 -d"/")
   tar zxvf ${SRC_TAR_NAME}
   if [ ! -d ${TEMP_PATH}/${SRC_NAME} ]; then
-    echo 'the file downloaded incorrectly'
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - the file downloaded incorrectly" | tee -a "$LOG_FILE"
     exit 1
   fi
-  # OR git master
-  #git clone https://github.com/acmesh-official/acme.sh.git
-  #if [ $? -ne 0 ]; then
-  #  echo "download failed"
-  #  exit 1;
-  #fi
-  #SRC_NAME=acme.sh
-  echo 'begin installing acme.sh tool...'
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - begin installing acme.sh tool..." | tee -a "$LOG_FILE"
   if [ "$has_config" = true ]; then
     emailpara="--accountemail \"${EMAIL}\""
   else
@@ -95,7 +90,7 @@ install_acme() {
   fi
   cd ${SRC_NAME}
   ./acme.sh --install --nocron --home ${ACME_BIN_PATH} --cert-home ${ACME_CRT_PATH} ${emailpara}
-  echo 'done install_acme'
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - done install_acme"  | tee -a "$LOG_FILE"
   rm -rf ${TEMP_PATH}/{${SRC_NAME},${SRC_TAR_NAME}}
   return 0
 }
@@ -104,11 +99,11 @@ register_account() {
   cd ${ACME_BIN_PATH}
   ${ACME_BIN_PATH}/acme.sh --register-account -m "${EMAIL}"
   if [ $? -ne 0 ]; then
-    echo 'register_account failed!!'
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - register_account failed!!" | tee -a "$LOG_FILE"
     return 1
   fi
   touch ${ACME_BIN_PATH}/registed
-  echo 'done register_account'
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - done register_account" | tee -a "$LOG_FILE"
   return 0
 }
 
@@ -120,47 +115,43 @@ generate_cert() {
       exit 1
     fi
   fi
-  echo 'begin generate_cert'
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - begin generate_cert" | tee -a "$LOG_FILE"
   cd ${ACME_BIN_PATH}
   source "${ACME_BIN_PATH}/acme.sh.env"
-  echo 'begin updating default cert by acme.sh tool'
-  ${ACME_BIN_PATH}/acme.sh --force --log --issue --dns ${DNS} --dnssleep ${DNS_SLEEP} -d "${DOMAIN}" -d "*.${DOMAIN}"
-  #   --cert-file ${ACME_CRT_PATH}/cert.pem \
-  #   --key-file ${ACME_CRT_PATH}/privkey.pem \
-  #   --ca-file ${ACME_CRT_PATH}/chain.pem \
-  #   --fullchain-file ${ACME_CRT_PATH}/fullchain.pem
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - begin updating default cert by acme.sh tool" | tee -a "$LOG_FILE"
+  ${ACME_BIN_PATH}/acme.sh --force --log --issue --dns ${DNS} --dnssleep ${DNS_SLEEP} -d "${DOMAIN}" -d "*.${DOMAIN}" -k 4096 --force >> "$LOG_FILE" 2>&1
   if [ $? -eq 0 ] && [ -s ${ACME_CRT_PATH}/${DOMAIN}/ca.cer ]; then
-    echo 'done generate_cert'
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - done generate_cert" | tee -a "$LOG_FILE"
     return 0
   else
-    echo '[ERR] fail to generate_cert'
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - [ERROR] fail to generate_cert" | tee -a "$LOG_FILE"
     exit 1
   fi
 }
 
 update_service() {
-  echo 'begin update_service'
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - begin update_service" | tee -a "$LOG_FILE"
 
-  CRT_PATH_NAME=$(sudo cat ${ARCHIEV_PATH}/DEFAULT)
+  CRT_PATH_NAME=$(cat ${ARCHIEV_PATH}/DEFAULT)
   CRT_PATH=${ARCHIEV_PATH}/${CRT_PATH_NAME}
   services=()
-  info=$(sudo cat "$INFO_FILE_PATH")
+  info=$(cat "$INFO_FILE_PATH")
   if [ -z "$info" ]; then
-    echo "Failed to read file: $INFO_FILE_PATH"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - Failed to read file: $INFO_FILE_PATH" | tee -a "$LOG_FILE"
     exit 1
   else
-    services=($(echo "$info" | jq -r ".$CRT_PATH_NAME.services[] | @base64"))
+	services=($(echo "$info" | jq -r ".\"$CRT_PATH_NAME\".services[] | @base64"))
   fi
   if [[ ${#services[@]} -eq 0 ]]; then
-    echo "[ERR] load INFO file - $INFO_FILE_PATH fail"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - [ERROR] load INFO file - $INFO_FILE_PATH fail"  | tee -a "$LOG_FILE"
     exit 1
   fi
 
   if [ -e ${ACME_CRT_PATH}/${DOMAIN}/ca.cer ] && [ -s ${ACME_CRT_PATH}/${DOMAIN}/ca.cer ]; then
-    sudo cp -v ${ACME_CRT_PATH}/${DOMAIN}/ca.cer ${CRT_PATH}/chain.pem
-    sudo cp -v ${ACME_CRT_PATH}/${DOMAIN}/fullchain.cer ${CRT_PATH}/fullchain.pem
-    sudo cp -v ${ACME_CRT_PATH}/${DOMAIN}/${DOMAIN}.cer ${CRT_PATH}/cert.pem
-    sudo cp -v ${ACME_CRT_PATH}/${DOMAIN}/${DOMAIN}.key ${CRT_PATH}/privkey.pem
+    cp -v ${ACME_CRT_PATH}/${DOMAIN}/ca.cer ${CRT_PATH}/chain.pem
+    cp -v ${ACME_CRT_PATH}/${DOMAIN}/fullchain.cer ${CRT_PATH}/fullchain.pem
+    cp -v ${ACME_CRT_PATH}/${DOMAIN}/${DOMAIN}.cer ${CRT_PATH}/cert.pem
+    cp -v ${ACME_CRT_PATH}/${DOMAIN}/${DOMAIN}.key ${CRT_PATH}/privkey.pem
     for service in "${services[@]}"; do
       display_name=$(echo "$service" | base64 --decode | jq -r '.display_name')
       isPkg=$(echo "$service" | base64 --decode | jq -r '.isPkg')
@@ -177,60 +168,41 @@ update_service() {
         src="$CRT_PATH/$f"
         des="$CP_TO_DIR/$f"
         if [[ -e "$des" ]]; then
-          sudo rm -fr "$des"
+          rm -fr "$des"
         fi
-        sudo cp -v "$src" "$des" || echo "[WRN] copy from $src to $des fail"
+        cp -v "$src" "$des" || echo "[WRN] copy from $src to $des fail"
       done
     done
-    if [ "$SYNCTHING" = true ]; then
-      echo 'Copy cert for Syncthing'
-      sudo cp -v --preserve=timestamps ${CRT_PATH}/cert.pem ${SYNCTHING_PATH}/https-cert.pem
-      sudo cp -v --preserve=timestamps ${CRT_PATH}/privkey.pem ${SYNCTHING_PATH}/https-key.pem
-      sudo chmod 664 ${SYNCTHING_PATH}/https-cert.pem
-      sudo chmod 600 ${SYNCTHING_PATH}/https-key.pem
-      sudo chown ${SYNCTHING_USER}:${SYNCTHING_GROUP} ${SYNCTHING_PATH}/https-cert.pem
-      sudo chown ${SYNCTHING_USER}:${SYNCTHING_GROUP} ${SYNCTHING_PATH}/https-key.pem
-    fi
-    echo 'done update_service'
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - done update_service"  | tee -a "$LOG_FILE"
   else
-    echo "no cert files, pls run: $0 generate_cert"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - no cert files, pls run: $0 generate_cert" | tee -a "$LOG_FILE"
   fi
 }
 
 reload_webservice() {
-  echo 'begin reload_webservice'
-
-  # Not all Synology NAS webservice are the same.
-  # Write code according to your configuration.
-  #echo 'reloading new cert...'
-  #/usr/syno/etc/rc.sysv/nginx.sh reload
-  #echo 'relading Apache 2.2'
-  #stop pkg-apache22
-  #start pkg-apache22
-  #reload pkg-apache22
-  #echo 'done reload_webservice'
-
-  if [ "$SYNCTHING" = true ]; then
-    curl -k -X POST -H "X-API-Key: ${SYNCTHING_API_KEY}" https://localhost:8384/rest/system/restart
-  fi
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - begin reload_webservice" | tee -a "$LOG_FILE"
 }
 
 revert_cert() {
-  echo 'begin revert_cert'
-  BACKUP_PATH=${BASE_ROOT}/backup/$1
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - begin revert_cert" | tee -a "$LOG_FILE"
+  BACKUP_PATH=~/cert_backup/$1
   if [ -z "$1" ]; then
-    BACKUP_PATH=$(cat ${BASE_ROOT}/backup/latest)
+    if [ ! -f ~/cert_backup/latest ]; then
+      echo "$(date '+%Y-%m-%d %H:%M:%S') - [ERROR] backup file: ~/cert_backup/latest not found." | tee -a "$LOG_FILE"
+      return 1
+    fi
+    BACKUP_PATH=$(cat ~/cert_backup/latest)
   fi
   if [ ! -d "${BACKUP_PATH}" ]; then
-    echo "[ERR] backup path: ${BACKUP_PATH} not found."
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - [ERROR] backup path: ${BACKUP_PATH} not found."  | tee -a "$LOG_FILE"
     return 1
   fi
   echo "${BACKUP_PATH}/certificate ${CRT_BASE_PATH}"
-  sudo cp -rf ${BACKUP_PATH}/certificate/* ${CRT_BASE_PATH}
+  cp -rf ${BACKUP_PATH}/certificate/* ${CRT_BASE_PATH}
   echo "${BACKUP_PATH}/package_cert ${PKG_CRT_BASE_PATH}"
-  sudo cp -rf ${BACKUP_PATH}/package_cert/* ${PKG_CRT_BASE_PATH}
+  cp -rf ${BACKUP_PATH}/package_cert/* ${PKG_CRT_BASE_PATH}
   reload_webservice
-  echo 'done revert_cert'
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - done revert_cert"  | tee -a "$LOG_FILE"
 }
 
 case "$1" in
