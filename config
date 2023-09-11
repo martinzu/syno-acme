@@ -1,8 +1,3 @@
-# 有无 syncthing 需要更新证书
-export SYNCTHING=false
-# 有的话，给出 API_KEY
-export SYNCTHING_API_KEY=InsertYourAPIKeyHere
-
 # 域名所有者电子邮件
 export EMAIL=your@email.name
 
